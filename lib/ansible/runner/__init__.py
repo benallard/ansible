@@ -954,6 +954,28 @@ class Runner(object):
 
     # *****************************************************
 
+    def _remove_tmp_path(self, conn, tmp, persist_files=None, module_name=None):
+        ''' remove a temporary path on a remote box '''
+
+        cmd = "rm -rf %s >/dev/null 2>&1; echo $? >/tmp/return" % tmp
+
+        #Do Something
+        if tmp.find("tmp") != -1 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files:
+            sudoable = True
+            if module_name == "accelerate":
+                # always run the accelerate module as the user
+                # specified in the play, not the sudo_user
+                sudoable = False
+            if self.su_user == 'root':
+                if self.su:
+                    res = self._low_level_exec_command(conn, cmd, tmp, su=True)
+                else:
+                    res = self._low_level_exec_command(conn, cmd, tmp, sudoable=sudoable)
+            else:
+                self._low_level_exec_command(conn, cmd, tmp, sudoable=False)
+
+    # *****************************************************
+
     def _copy_module(self, conn, tmp, module_name, module_args, inject, complex_args=None):
         ''' transfer a module over SFTP, does not run it '''
         (

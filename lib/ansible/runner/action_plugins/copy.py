@@ -125,11 +125,12 @@ class ActionModule(object):
         module_result = {"changed": False}
         for source_full, source_rel in source_files:
             # We need to get a new tmp path for each file, otherwise the copy module deletes the folder.
-            tmp = self.runner._make_tmp_path(conn)
+            new_tmp = self.runner._make_tmp_path(conn)
             local_md5 = utils.md5(source_full)
 
             if local_md5 is None:
                 result=dict(failed=True, msg="could not find src=%s" % source_full)
+                self.runner._remove_tmp_path(conn, new_tmp)
                 return ReturnData(conn=conn, result=result)
 
             # This is kind of optimization - if user told us destination is
@@ -140,7 +141,7 @@ class ActionModule(object):
             else:
                 dest_file = dest
 
-            remote_md5 = self.runner._remote_md5(conn, tmp, dest_file)
+            remote_md5 = self.runner._remote_md5(conn, new_tmp, dest_file)
             if remote_md5 == '3':
                 # Destination is a directory
                 if content is not None:
@@ -148,10 +149,11 @@ class ActionModule(object):
                     result = dict(failed=True, msg="can not use content with a dir as dest")
                     return ReturnData(conn=conn, result=result)
                 dest_file = os.path.join(dest, source_rel)
-                remote_md5 = self.runner._remote_md5(conn, tmp, dest_file)
+                remote_md5 = self.runner._remote_md5(conn, new_tmp, dest_file)
 
             # remote_md5 == '1' would mean that the file does not exist.
             if remote_md5 != '1' and not force:
+                self.runner._remove_tmp_path(conn, new_tmp)
                 continue
 
             exec_rc = None
@@ -160,7 +162,7 @@ class ActionModule(object):
                 changed = True
 
                 if self.runner.diff and not raw:
-                    diff = self._get_diff_data(conn, tmp, inject, dest_file, source_full)
+                    diff = self._get_diff_data(conn, new_tmp, inject, dest_file, source_full)
                 else:
                     diff = {}
 
@@ -170,11 +172,12 @@ class ActionModule(object):
                     diffs.append(diff)
                     changed = True
                     module_result = dict(changed=True)
+                    self.runner._remove_tmp_path(conn, new_tmp)
                     continue
 
 
                 # transfer the file to a remote tmp location
-                tmp_src = tmp + 'source'
+                tmp_src = new_tmp + 'source'
 
                 if not raw:
                     conn.put_file(source_full, tmp_src)
@@ -186,9 +189,10 @@ class ActionModule(object):
 
                 # fix file permissions when the copy is done as a different user
                 if self.runner.sudo and self.runner.sudo_user != 'root' and not raw:
-                    self.runner._low_level_exec_command(conn, "chmod a+r %s" % tmp_src, tmp)
+                    self.runner._low_level_exec_command(conn, "chmod a+r %s" % tmp_src, new_tmp)
 
                 if raw:
+                    self.runner._remove_tmp_path(conn, new_tmp)
                     continue
 
                 # run the copy module
@@ -210,6 +214,7 @@ class ActionModule(object):
                     os.remove(tmp_content)
 
                 if raw:
+                    self.runner._remove_tmp_path(conn, new_tmp)
                     continue
 
                 tmp_src = tmp + source_rel
@@ -224,9 +229,12 @@ class ActionModule(object):
 
             module_result = module_return.result
             if module_result.get('failed') == True:
+                self.runner._remove_tmp_path(conn, new_tmp)
                 return module_return
             if module_result.get('changed') == True:
                 changed = True
+
+            self.runner._remove_tmp_path(conn, new_tmp)
 
         # TODO: Support detailed status/diff for multiple files
         if len(source_files) == 1:
