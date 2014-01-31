@@ -385,10 +385,7 @@ class Runner(object):
         cmd = " ".join([environment_string.strip(), shebang.replace("#!","").strip(), cmd])
         cmd = cmd.strip()
 
-        dirs = ""
-        if len(self.tmp_dirs) > 0:
-            for tmp_dir in self.tmp_dirs:
-                dirs += " " + tmp_dir
+        dirs = " ".join(self.tmp_dirs)
 
         if len(self.tmp_dirs) > 0 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files:
             if not self.sudo or self.su or self.sudo_user == 'root' or self.su_user == 'root':
@@ -924,6 +921,25 @@ class Runner(object):
 
     # *****************************************************
 
+    def _tmp_error_checking(self, result):
+        ''' Error checking for result response '''
+
+        # error handling on this seems a little aggressive?
+        if result['rc'] == 5:
+            output = 'Authentication failure.'
+        elif result['rc'] == 255 and self.transport in ['ssh', 'ssh_old']:
+            if utils.VERBOSITY > 3:
+                output = 'SSH encountered an unknown error. The output was:\n%s' % (result['stdout']+result['stderr'])
+            else:
+                output = 'SSH encountered an unknown error during the connection. We recommend you re-run the command using -vvvv, which will enable SSH debugging output to help diagnose the issue'
+        else:
+            output = 'Authentication or permission failure.  In some cases, you may have been able to authenticate and did not have permissions on the remote directory. Consider changing the remote temp path in ansible.cfg to a path rooted in "/tmp". Failed command was: %s, exited with result %d' % (cmd, result['rc'])
+        if 'stdout' in result and result['stdout'] != '':
+            output = output + ": %s" % result['stdout']
+        raise errors.AnsibleError(output)
+
+    # *****************************************************
+
     def _make_tmp_path(self, conn):
         ''' make and return a temporary path on a remote box '''
 
@@ -941,20 +957,8 @@ class Runner(object):
 
         result = self._low_level_exec_command(conn, cmd, None, sudoable=False)
 
-        # error handling on this seems a little aggressive?
         if result['rc'] != 0:
-            if result['rc'] == 5:
-                output = 'Authentication failure.'
-            elif result['rc'] == 255 and self.transport in ['ssh', 'ssh_old']:
-                if utils.VERBOSITY > 3:
-                    output = 'SSH encountered an unknown error. The output was:\n%s' % (result['stdout']+result['stderr'])
-                else:
-                    output = 'SSH encountered an unknown error during the connection. We recommend you re-run the command using -vvvv, which will enable SSH debugging output to help diagnose the issue'
-            else:
-                output = 'Authentication or permission failure.  In some cases, you may have been able to authenticate and did not have permissions on the remote directory. Consider changing the remote temp path in ansible.cfg to a path rooted in "/tmp". Failed command was: %s, exited with result %d' % (cmd, result['rc'])
-            if 'stdout' in result and result['stdout'] != '':
-                output = output + ": %s" % result['stdout']
-            raise errors.AnsibleError(output)
+            self._tmp_error_checking(result)
 
         rc = utils.last_non_blank_line(result['stdout']).strip() + '/'
         # Catch failure conditions, files should never be
@@ -962,6 +966,30 @@ class Runner(object):
         if rc == '/': 
             raise errors.AnsibleError('failed to resolve remote temporary directory from %s: `%s` returned empty string' % (basetmp, cmd))
         return rc
+
+    # *****************************************************
+
+    def _cleanup_tmp_path(self, conn, path):
+        ''' removes a temporary path on a remote box '''
+
+        cmd = 'rm -rf %s' % path
+        result = self._low_level_exec_command(conn, cmd, None, sudoable=False)
+
+        # FIXME:
+        #   error checking should be a function since we've now duplicated it
+        #   from _make_tmp_path() above
+
+        # error handling on this seems a little aggressive?
+        if result['rc'] != 0:
+            self._tmp_error_checking(result)
+        else:
+            try:
+                self.tmp_dirs.remove(path)
+            except:
+                # ignore
+                pass
+
+        return int(result.get('rc', -1))
 
     # *****************************************************
 

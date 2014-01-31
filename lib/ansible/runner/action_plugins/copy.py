@@ -152,6 +152,7 @@ class ActionModule(object):
 
             # remote_md5 == '1' would mean that the file does not exist.
             if remote_md5 != '1' and not force:
+                self.runner._cleanup_tmp_path(conn, new_tmp)
                 continue
 
             exec_rc = None
