@@ -145,6 +145,7 @@ class Runner(object):
         su_user=None,                       # User to su to when running command, ex: 'root'
         su_pass=C.DEFAULT_SU_PASS,
         run_hosts=None,                     # an optional list of pre-calculated hosts to run on
+        tmp_dirs=None,                      # the created tmp directories, must be a list
         ):
 
         # used to lock multiprocess inputs and outputs at various levels
@@ -153,6 +154,9 @@ class Runner(object):
 
         if not complex_args:
             complex_args = {}
+
+        if not tmp_dirs:
+            tmp_dirs = []
 
         # storage & defaults
         self.check            = check
@@ -196,6 +200,7 @@ class Runner(object):
         self.su_user_var      = su_user
         self.su_user          = None
         self.su_pass          = su_pass
+        self.tmp_dirs         = tmp_dirs
 
         if self.transport == 'smart':
             # if the transport is 'smart' see if SSH can support ControlPersist if not use paramiko
@@ -377,14 +382,18 @@ class Runner(object):
         if not shebang:
             raise errors.AnsibleError("module is missing interpreter line")
 
-
         cmd = " ".join([environment_string.strip(), shebang.replace("#!","").strip(), cmd])
         cmd = cmd.strip()
 
-        if tmp.find("tmp") != -1 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files:
+        dirs = ""
+        if len(self.tmp_dirs) > 0:
+            for tmp_dir in self.tmp_dirs:
+                dirs += " " + tmp_dir
+
+        if len(self.tmp_dirs) > 0 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files:
             if not self.sudo or self.su or self.sudo_user == 'root' or self.su_user == 'root':
                 # not sudoing or sudoing to root, so can cleanup files in the same step
-                cmd = cmd + "; rm -rf %s >/dev/null 2>&1" % tmp
+                cmd = cmd + "; rm -rf %s >/tmp/output 2>&1; echo %s >/tmp/mytmp1" % (dirs, dirs)
 
         sudoable = True
         if module_name == "accelerate":
@@ -397,11 +406,11 @@ class Runner(object):
         else:
             res = self._low_level_exec_command(conn, cmd, tmp, sudoable=sudoable, in_data=in_data)
 
-        if tmp.find("tmp") != -1 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files:
+        if len(self.tmp_dirs) > 0 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files:
             if (self.sudo or self.su) and (self.sudo_user != 'root' or self.su_user != 'root'):
             # not sudoing to root, so maybe can't delete files as that other user
             # have to clean up temp files as original user in a second step
-                cmd2 = "rm -rf %s >/dev/null 2>&1" % tmp
+                cmd2 = "rm -rf %s >/tmp/output 2>&1; echo %s >/tmp/mytmp2" % (dirs, dirs)
                 self._low_level_exec_command(conn, cmd2, tmp, sudoable=False)
 
         data = utils.parse_json(res['stdout'])
@@ -927,6 +936,8 @@ class Runner(object):
         if self.remote_user != 'root' or ((self.sudo or self.su) and (self.sudo_user != 'root' or self.su != 'root')):
             cmd += ' && chmod a+rx %s' % basetmp
         cmd += ' && echo %s' % basetmp
+
+        self.tmp_dirs.append(basetmp)
 
         result = self._low_level_exec_command(conn, cmd, None, sudoable=False)
 
