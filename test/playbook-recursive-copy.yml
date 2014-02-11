@@ -46,6 +46,62 @@
     - command: test "{{res.changed}}" = "False"
 
     #
+    # Next test using content as the defined source.
+    #
+
+    - name: "content defined as standard text, dest file"
+      command: rm -rf {{testdir}}
+    - file: state=directory dest={{testdir}}
+    - copy: content="generic content" dest={{testdir}}/aFile
+      register: res
+    - command: test -f {{testdir}}/aFile
+    - command: test "{{res.changed}}" = "True"
+    - copy: content="generic content" dest={{testdir}}/aFile
+      register: res
+    - command: test "{{res.changed}}" = "False"
+
+    - name: "content defined as standard text with replace, dest file"
+      command: rm -rf {{testdir}}
+    - file: state=directory dest={{testdir}}
+    - copy: content="{{testdir}}" dest={{testdir}}/aFile
+      register: res
+    - command: test -f {{testdir}}/aFile
+    - command: test "{{res.changed}}" = "True"
+    - copy: content="{{testdir}}" dest={{testdir}}/aFile
+      register: res
+    - command: test "{{res.changed}}" = "False"
+
+    - name: "content defined as standard text with replace, dest file"
+      command: rm -rf {{testdir}}
+    - file: state=directory dest={{testdir}}
+    - copy:
+         content='{"a": "value"}'
+         dest='{{testdir}}/aFile'
+      register: res
+    - command: test -f {{testdir}}/aFile
+    - command: test "{{res.changed}}" = "True"
+    - copy:
+         content='{"a": "value"}'
+         dest='{{testdir}}/aFile'
+      register: res
+    - command: test "{{res.changed}}" = "False"
+
+    - name: "content defined as standard text with replace, dest file"
+      command: rm -rf {{testdir}}
+    - file: state=directory dest={{testdir}}
+    - copy:
+         content='{"a": "{{testdir}}"}'
+         dest='{{testdir}}/aFile'
+      register: res
+    - command: test -f {{testdir}}/aFile
+    - command: test "{{res.changed}}" = "True"
+    - copy:
+         content='{"a": "{{testdir}}"}'
+         dest='{{testdir}}/aFile'
+      register: res
+    - command: test "{{res.changed}}" = "False"
+
+    #
     # Now, test recursive behavior
     #
 
