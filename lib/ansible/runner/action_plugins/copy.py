@@ -72,6 +72,7 @@ class ActionModule(object):
         # If content is defined make a temp file and write the content into it.
         if content is not None:
             try:
+                # content will be of type dict if it contains JSON. To write a file we need to serialize the object.
                 if type(content) is dict:
                     content = json.dumps(content)
                 content_tempfile = self._create_content_tempfile(content)
