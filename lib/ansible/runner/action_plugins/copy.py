@@ -72,6 +72,9 @@ class ActionModule(object):
         # If content is defined make a temp file and write the content into it.
         if content is not None:
             try:
+                # If the content has been defined as valid JSON it may be decoded into a dict.
+                # So if content is of type dict we should then encode it into a string.
+                # This fixes a the error that we hit when we are not able to write out a serialized object.
                 if type(content) is dict:
                     content = json.dumps(content)
                 content_tempfile = self._create_content_tempfile(content)
