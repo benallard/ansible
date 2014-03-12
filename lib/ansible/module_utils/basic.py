@@ -991,7 +991,8 @@ class AnsibleModule(object):
             # rename might not preserve context
             self.set_context_if_different(dest, context, False)
 
-    def run_command(self, args, check_rc=False, close_fds=False, executable=None, data=None, binary_data=False, path_prefix=None, cwd=None, use_unsafe_shell=False):
+    def run_command(self, args, check_rc=False, close_fds=False, executable=None, data=None, binary_data=False,
+                    path_prefix=None, cwd=None, use_unsafe_shell=False, untaint_args=False):
         '''
         Execute a command, returns rc, stdout, and stderr.
         args is the command to run
@@ -1005,6 +1006,8 @@ class AnsibleModule(object):
                               Default is False.
         - executable (string) See documentation for subprocess.Popen().
                               Default is None.
+        - untaint_args (boolean) Execute shell escaped args.
+                              Default is False.
         '''
 
         shell = False
@@ -1072,6 +1075,17 @@ class AnsibleModule(object):
         if cwd:
             kwargs['cwd'] = cwd
 
+        if untaint_args:
+            # Make sure that args is shell-escaped.
+            if isinstance(args, list):
+                new_args = []
+                for arg in args:
+                    new_args.append(pipes.quote(arg))
+                args = new_args
+            elif isinstance(args, basestring):
+                args = pipes.quote(args)
+            else:
+                self.fail_json(msg="args must be a list or a string.")
 
         try:
             cmd = subprocess.Popen(args, **kwargs)
