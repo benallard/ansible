@@ -436,6 +436,14 @@ class Inventory(object):
                 else:
                     results.append(x)
             self._subset = results
+            self.add_localhost_to_inventory_if_in_subset()
+
+    def add_localhost_to_inventory_if_in_subset(self):
+        """ If localhost is in the subset make sure that it is implicitly in the inventory. """
+        localhost_list = ["localhost", "127.0.0.1"]
+        for name in localhost_list:
+            if [m.group(1) for l in self._subset for m in (re.compile('(' + name + '$)').search(l),) if m]:
+                self.get_host(name)
 
     def lift_restriction(self):
         """ Do not restrict list operations """
