@@ -436,14 +436,17 @@ class Inventory(object):
                 else:
                     results.append(x)
             self._subset = results
-            self.add_localhost_to_inventory_if_in_subset()
+            self.add_localhost_to_hosts_cache_part_of_subset()
 
-    def add_localhost_to_inventory_if_in_subset(self):
-        """ If localhost is in the subset make sure that it is implicitly in the inventory. """
+    def add_localhost_to_hosts_cache_part_of_subset(self):
+        """ If localhost is in the limit(subset) make sure that it is implicitly added to the inventory. """
         localhost_list = ["localhost", "127.0.0.1"]
-        for name in localhost_list:
-            if [m.group(1) for l in self._subset for m in (re.compile('(' + name + '$)').search(l),) if m]:
-                self.get_host(name)
+        for localhost_string in localhost_list:
+            # We want to match if the localhost string is at the end of the string being searched.
+            for subset_string in self._subset:
+                if subset_string.endswith(localhost_string):
+                    # When matched the get_host method will add localhost or 127.0.0.1 if not found in the inventory.
+                    self.get_host(localhost_string)
 
     def lift_restriction(self):
         """ Do not restrict list operations """
