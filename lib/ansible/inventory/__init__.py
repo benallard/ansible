@@ -37,11 +37,14 @@ class Inventory(object):
     Host inventory for ansible.
     """
 
-    __slots__ = [ 'host_list', 'groups', '_restriction', '_also_restriction', '_subset', 
+    __slots__ = ['_localhost_list', 'host_list', 'groups', '_restriction', '_also_restriction', '_subset',
                   'parser', '_vars_per_host', '_vars_per_group', '_hosts_cache', '_groups_list',
                   '_pattern_cache', '_vars_plugins', '_playbook_basedir']
 
     def __init__(self, host_list=C.DEFAULT_HOST_LIST):
+
+        # Static list of localhost values.
+        self._localhost_list = ["localhost", "127.0.0.1"]
 
         # the host file file, or script path, or list of hosts
         # if a list, inventory data will NOT be loaded
@@ -284,7 +287,7 @@ class Inventory(object):
                         results.append(host)
                         hostnames.add(host.name)
 
-        if pattern in ["localhost", "127.0.0.1"] and len(results) == 0:
+        if pattern in self._localhost_list and len(results) == 0:
             new_host = self._create_implicit_localhost(pattern)
             results.append(new_host)
         return results
@@ -324,9 +327,9 @@ class Inventory(object):
         return self._hosts_cache[hostname]
 
     def _get_host(self, hostname):
-        if hostname in ['localhost','127.0.0.1']:
+        if hostname in self._localhost_list:
             for host in self.get_group('all').get_hosts():
-                if host.name in ['localhost', '127.0.0.1']:
+                if host.name in self._localhost_list:
                     return host
             return self._create_implicit_localhost(hostname)
         else:
@@ -384,7 +387,7 @@ class Inventory(object):
         """ return a list of hostnames for a pattern """
 
         result = [ h.name for h in self.get_hosts(pattern) ]
-        if len(result) == 0 and pattern in ["localhost", "127.0.0.1"]:
+        if len(result) == 0 and pattern in self._localhost_list:
             result = [pattern]
         return result
 
@@ -436,17 +439,16 @@ class Inventory(object):
                 else:
                     results.append(x)
             self._subset = results
-            self.add_localhost_to_hosts_cache_part_of_subset()
+            self._add_implicit_localhost_if_localhost_in_subset()
 
-    def add_localhost_to_hosts_cache_part_of_subset(self):
+    def _add_implicit_localhost_if_localhost_in_subset(self):
         """ If localhost is in the limit(subset) make sure that it is implicitly added to the inventory. """
-        localhost_list = ["localhost", "127.0.0.1"]
-        for localhost_string in localhost_list:
+        for localhost_string in self._localhost_list:
             # We want to match if the localhost string is at the end of the string being searched.
             for subset_string in self._subset:
                 if subset_string.endswith(localhost_string):
-                    # When matched the get_host method will add localhost or 127.0.0.1 if not found in the inventory.
-                    self.get_host(localhost_string)
+                    # When matched the create the implicit localhost.
+                    self._create_implicit_localhost(localhost_string)
 
     def lift_restriction(self):
         """ Do not restrict list operations """
